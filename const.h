@@ -1,7 +1,6 @@
 #pragma once
 //加载路径（必要时修改）
 //请务必把电器设备表文件转换为国标（GBK（GB2013））编码（windows10），转为与控制台相对应的编码
-//编码转换其实VS就可以做到（笑
 #define DATA_PATH "D:\\program\\c\\DStest\\电气设备表.txt"
 #define OUT_PATH "D:\\program\\c\\DStest\\output.txt"
 #define MAX_PATH_LENGTH 70

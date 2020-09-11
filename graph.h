@@ -1,32 +1,28 @@
 #pragma once
 #include "const.h"
 #include "DBpart_C.h"
-
 //表的最大长度和增量
 #define MAXLEN 100
 #define INC 20
 
-//isoelec图和表
+//isoelec(节点)图和表
 typedef struct ISOE_ChainNode
 {
 	ElemType_Vex* pVex;
 	ISOE_ChainNode* next;
 }ISOE_ChainNode;
-
 typedef struct ISOE_AMListNode
 {
 	ElemType_Deg2* pwrline;		//指向相应的X非0的输电线
 	int isoe_A,isoe_B;			//elec点（节点、等电位点）的序号
 	ISOE_AMListNode *link_A,*link_B;
 }ISOE_AMListNode;
-
 typedef struct ISOE_Heads		//代表一个节点/等电位点
 {
 	int visited;				//true就是被访问过
 	ISOE_ChainNode* ChainHead;
 	ISOE_AMListNode* AMListHead;
 }ISOE_Heads;
-
 typedef struct ISOE_List
 {
 	int length;	//线性表长
@@ -44,7 +40,6 @@ Status InitList(ISOE_List &isoelist)
 	isoelist.length=0;
 	return OK;
 }
-
 Status InsertList(ISOE_List &isoelist,ISOE_Heads heads)	//只在尾巴上插入
 {
 	if(isoelist.length>=isoelist.listsize)
@@ -59,16 +54,13 @@ Status InsertList(ISOE_List &isoelist,ISOE_Heads heads)	//只在尾巴上插入
 	isoelist.length++;
 	return OK;
 }
-
 Status GetList(ISOE_List& L,int i,ISOE_Heads& record)		//根据指定的秩i获取一条记录
 {
 	if(i<1||i>L.length)return ERROR;
 	record=L.base[i-1];
 	return OK;
 }
-
 //对ISOE链表的操作
-
 //插入(插在开头)
 Status InsertISOE_Chain(ISOE_List &L,int idx,ElemType_Vex* pVex)
 {
@@ -79,8 +71,7 @@ Status InsertISOE_Chain(ISOE_List &L,int idx,ElemType_Vex* pVex)
 	L.base[idx-1].ChainHead=pNewNode;
 	return OK;
 }
-
-//-------对整个ISOE的删除
+//对整个ISOE的删除（可能有bug）
 void DestoryISOE_AM(ISOE_AMListNode* pEdge)
 {
 	if(pEdge->link_A==NULL&&pEdge->link_B==NULL)
@@ -96,10 +87,8 @@ void DestoryISOE_AM(ISOE_AMListNode* pEdge)
 	{
 		DestoryISOE_AM(pEdge->link_B);
 	}
-	free(pEdge);
 	return;
 }
-
 Status DestoryList(ISOE_List& L)
 {
 	ISOE_ChainNode *pNode,*ptemp;
@@ -215,6 +204,7 @@ void visitVex(DataBase &DB,ElemType_Vex* pVex,int &cur_isoe_idx,ISOE_List &L,pwr
 	{
 		//先确定pEdge是否可用、是否是输电线路（是输电线路就存到链表（还没做）里）
 		Node* pNode=FindAVL_ID(DB.EquipTree,pEdge->id);
+		if(pNode==NULL)return;
 		if(((ElemType_Deg2*)pNode->data)->X>=1e-6||((ElemType_Deg2*)pNode->data)->X<=-1e-6)
 		{
 			//X!=0,若status==ON,且对面的点还未访问（防重复访问）则存输电线路
@@ -388,7 +378,7 @@ Status GetISLAND(ISLAND_List& IL,int i,ISLAND_ChainHead& record)		//根据指定的秩
 	return OK;
 }
 
-//------销毁线性表
+//销毁线性表
 void DestoryISLAND(ISLAND_List &IL)
 {
 	ISLAND_ChainNode *pNode,*ptemp;
@@ -436,7 +426,6 @@ Status visitISOE(ISOE_List &L,int isoe_idx,ISLAND_List &IL,int island_idx)
 	//已访问则直接退出
 	return OK;
 }
-
 
 //第二步：根据L生成拓扑岛/孤岛
 Status Update_step2(ISLAND_List &IL,ISOE_List &L)
@@ -513,6 +502,7 @@ Status InitCrossList(CrossList &M,int n)
 	if(phead==NULL)return ERROR;
 	M.rhead=phead;
 }
+//销毁矩阵
 Status DestoryCrossList(CrossList &M)
 {
 	//这个回收有问题，暂时充用---------------------------------------------------
@@ -597,15 +587,14 @@ Status Get_symm(CrossList &M,int i,int j,float &a)
 	//重点关注每行/列第一个就是目标结点的情况。此时书上样例无效
 	if(M.rhead[i-1]==NULL||M.rhead[i-1]->j>=j)
 	{
+		if(M.rhead[i-1]==NULL)
+		{
+			a=0;return OK;
+		}
 		if(M.rhead[i-1]->j==j)
 		{
 			a=M.rhead[i-1]->e;
 			return OK;
-		}
-		else 
-		{
-			a=0;
-			return OK; 
 		}
 	}
 	psearch=M.rhead[i-1];
@@ -621,9 +610,8 @@ Status Get_symm(CrossList &M,int i,int j,float &a)
 	a=0;
 	return OK;
 }
-//------销毁矩阵
 
-//第三步
+//第三步：计算导纳矩阵
 float CrossListATij(ISOE_List &L,int i,int j)
 {
 	float mat_elem=0.0f;
@@ -661,7 +649,7 @@ Status Update_step3(ISOE_List &L,CrossList &M)
 	return OK;
 }
 
-//为求关节点留下的函数接口
+//求关节点留下的函数接口
 void DFSArticul(ISOE_List &L,int v0,int &count,int* &low,int vexnum)
 {
 	int min;
@@ -678,7 +666,9 @@ void DFSArticul(ISOE_List &L,int v0,int &count,int* &low,int vexnum)
 			if(low[isoe_w-1]<min)
 				min=low[isoe_w-1];
 			if(low[isoe_w-1]>=L.base[v0-1].visited)
+			{
 				printf("%d ",v0);
+			}
 		}
 		else if(L.base[isoe_w-1].visited<min)
 		{

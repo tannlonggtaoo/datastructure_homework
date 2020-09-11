@@ -41,7 +41,6 @@ int main(void)
 		//文本解析、插入
 		DataRecord_handler(buffer,&id_tmp,&status_tmp,name_tmp,&bus_tmp,&bus2_tmp,&X_tmp);
 		if(bus2_tmp<0)Insert(DB,id_tmp,status_tmp,name_tmp,bus_tmp);
-		//这里要加错误识别
 		else Insert(DB,id_tmp,status_tmp,name_tmp,bus_tmp,bus2_tmp,X_tmp);
 
 		//读入新的一行
@@ -50,7 +49,7 @@ int main(void)
 
 	fclose(fpin);
 	printf(DATA_PATH);
-	printf(" has been initialized.\n\n  WARNING:YOU MAY GET UNEXPECTED RESULT IF MODEL IS NOT UPDATED\n\nplease input your command:\n");
+	printf(" has been initialized.\n\please input your command:\n");
 
 	//以下是命令行监听程序（主循环）（exit指令退出）
 	char op_path[MAX_PATH_LENGTH];	
@@ -59,11 +58,11 @@ int main(void)
 	CrossList M;
 	while(true)
 	{
-		op_path[0]='\0';	//表示不处于文件读取命令模式中（文件读取命令将不处理嵌套的execute指令）
+		//表示不处于文件读取命令模式中（文件读取命令将不处理嵌套的execute指令）
+		op_path[0]='\0';	
 		//读入指令
 		printf(">>");
-		gets(buffer);		//注意：应当使用gets、fgets，之后可能还要改
-
+		gets(buffer);
 		//指令文本解析
 		Command_handler(DB,buffer,op_path,L,IL,M);
 		if(op_path[0]!='\0')	//即表示正在读文件中的指令或收到退出指令
@@ -97,3 +96,4 @@ int main(void)
 //20200909 2024 文件指令测试，正常
 //20200909 2118 基础功能完全实现
 //20200910 1146 update第一步实现，测试通过
+//20200911 1201 新增销毁功能、添加注释

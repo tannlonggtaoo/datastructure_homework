@@ -6,6 +6,7 @@
 #include "const.h"
 #include "DBpart_C.h"
 #include "graph.h"
+//减少调用函数的开销
 #define nextTok(buf,tok)		\
 	{                           \
 	while(buf[tok]!='\0')tok++; \
@@ -22,7 +23,7 @@
 	buffer[token+1]='$';													\
 	token=0;																\
 }
-
+//对[域][值][域][值]...格式的串进行处理
 Status DataRecord_handler(char *buffer,ID_Type* id_tmp,Equip_Status* status_tmp,char* name_tmp,VexID_Type* bus_tmp,VexID_Type* bus2_tmp,float* X_tmp)
 {
 	int token;
@@ -142,10 +143,10 @@ Status DestoryBusBuf(BusBuf& L)	//归还空间
 	return OK;
 }
 
+//命令识别处理
 Status Command_handler(DataBase &DB,char* buffer,char* path,ISOE_List &L,ISLAND_List &IL,CrossList &M)
 {
 	int token=0;
-
 	//定义临时变量
 	ID_Type id_tmp=0,id_old=0;
 	Equip_Status status_tmp=UNKNOWN;
@@ -154,9 +155,10 @@ Status Command_handler(DataBase &DB,char* buffer,char* path,ISOE_List &L,ISLAND_
 	VexID_Type bus2_tmp=-1;
 	float X_tmp=0.0f;
 
+	//返回状态
 	Status cmdStatus;
-
-	while(buffer[token]=='\0'||buffer[token]==' '||buffer[token]=='\t')token++;	//移到第一个非零元
+	//移到第一个非零元
+	while(buffer[token]=='\0'||buffer[token]==' '||buffer[token]=='\t')token++;	
 
 	switch (buffer[token])
 	{
@@ -173,7 +175,9 @@ Status Command_handler(DataBase &DB,char* buffer,char* path,ISOE_List &L,ISLAND_
 					for(int idx=1;idx<=IL.length;idx++)
 					{
 						if(IL.base[idx-1].isoc_num>2)		//单点、二点非割点
+						{
 							FindArticul(L,IL.base[idx-1].isoc_num,IL.base[idx-1].pHead->isoe_idx);
+						}
 					}
 					printf("\n");
 					cmdStatus=OK;
@@ -311,8 +315,13 @@ Status Command_handler(DataBase &DB,char* buffer,char* path,ISOE_List &L,ISLAND_
 		else cmdStatus=ERROR;
 		break;
 	case 'u':
-		if(strMatch(buffer,token,"update model"))
+		preProcess(buffer,token);
+		while(buffer[token]=='\0'||buffer[token]==' '||buffer[token]=='\t')token++;	
+		if(strMatch(buffer,token,"update"))
 		{
+			nextTok(buffer,token);
+			if(strMatch(buffer,token,"model"))
+			{
 			if(IL.base!=NULL)
 			{
 			//step0,把旧的结构删除
@@ -334,6 +343,8 @@ Status Command_handler(DataBase &DB,char* buffer,char* path,ISOE_List &L,ISLAND_
 			}
 			printf("\n");
 			cmdStatus=OK;
+			}
+			else cmdStatus=ERROR;
 		}
 		else cmdStatus=ERROR;
 		break;

@@ -1,7 +1,5 @@
-//把结构体按照C风格重写，函数依然靠模板
-
 #pragma once
-//下面三个头文件也一样有此编译头
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,72 +9,72 @@
 #define MAX_NAMESIZE 40		//设备名称最大长度
 typedef int ID_Type;		//设备ID类型
 typedef int VexID_Type;		//电气连接点ID类型（纯粹为了可读性）
-enum Equip_Type{BUS,DEG1,DEG2};		//设备类型:总线（电气连接点）、1端、二端
+enum Equip_Type{BUS,DEG1,DEG2};		//设备类型:电气连接点、1端、二端
+//（注：本程序中vex或bus指代电气连接点，isoe指代节点）
 enum Equip_Status {OFF,ON,BROKEN,UNKNOWN};	//设备状态
+
+//AVL树结点
 //其中的data只能是以上三种ElemType之一
-
-
-	
-typedef struct Node		//通用AVL树树节点结构
+typedef struct Node
 {
-	 void *data;		//选ElemType_xx其中之一
+	 void *data;
 	 int balance_factor;
 	 Node *left;
 	 Node *right;
 }Node,*BiTree;
 
-
-typedef struct ChainNode	//加上chain前缀;本链表有结束结点id=-1,next==NULL；
+//链表结点
+typedef struct ChainNode
 {
 	ID_Type id;
 	ChainNode *next;
 }ChainNode;
 
-
+//邻接多重表(Adjacent Multilist)边结点
 typedef struct AMListNode
 {
-	bool mark;
+	bool mark;			//搜索标记
 	ID_Type id;			//对应二端设备
 	struct ElemType_Vex *vex_A,*vex_B;
 	AMListNode *link_A,*link_B;
 }AMListNode;
 
-typedef struct ElemType_Vex		//电气连接点的数据的结构
+//电气连接点的数据的结构
+typedef struct ElemType_Vex		
 {
 	Equip_Type type;
 	VexID_Type id;
 	ChainNode *Deg1_Equips;			//一端设备链表
 	AMListNode *Deg2_Equips;		//二端设备的邻接多重表(Adjacent Multilist)
-	int isoe;					//对应的节点（等电位点）序号
-	bool visited;		//是否访问过结点，供DFS使用（可能要对本文件内容改改）
+	int isoe;						//对应的节点（等电位点）序号
+	bool visited;					//是否访问过结点标记
 }ElemType_Vex;
-
-typedef struct ElemType_Deg1	//单电气连接点的设备的数据的结构
+//单电气连接点的设备的数据的结构
+typedef struct ElemType_Deg1	
 {
 	Equip_Type type;
 	ID_Type id;
-	ElemType_Vex *bus;				//连接的电气连接点(总线)的设备链表地址
+	ElemType_Vex *bus;				//连接的电气连接点的地址
 	Equip_Status status;
 	char name[MAX_NAMESIZE];
 }ElemType_Deg1;
-
-typedef struct ElemType_Deg2	//双电气连接点设备的数据的结构
+//双电气连接点设备的数据的结构
+typedef struct ElemType_Deg2	
 {
 	Equip_Type type;
 	ID_Type id;
-	ElemType_Vex *bus_A;		//电气连接点1的设备链表地址
-	ElemType_Vex *bus_B;		//电气连接点2的邻接多重表地址（这也支持有向边的情形）
+	ElemType_Vex *bus_A;		//电气连接点1地址
+	ElemType_Vex *bus_B;		//电气连接点2地址
 	Equip_Status status;
-	float X;				//电抗
+	float X;					//电抗
 	char name[MAX_NAMESIZE];
 }ElemType_Deg2;
-
+//数据库结构
 typedef struct dataBase
 {
 	BiTree EquipTree;
 	BiTree VexTree;
 }DataBase;
-
 //平衡因子、相等关系的定义
 #define EqualHigh 0
 #define LeftHigh +1
@@ -84,14 +82,12 @@ typedef struct dataBase
 #define Equal(a,b) ((a)==(b))
 #define LessThan(a,b) ((a)<(b))
 #define MoreThan(a,b) ((a)>(b))
-
+//某两个函数的声明
 Status DestoryChain(ElemType_Vex* pVex);
-Status DestoryAMList(AMListNode *pEdge);
 
 //以下是AVLTree函数部分
 //销毁
 //注意：这只会销毁本树的数据，对于外链到其他树上的数据不作改动；故应在接近结束时使用
-
 Status DestoryBiTree(BiTree &T)
 {
 	if(T==NULL)return OK;
@@ -101,7 +97,6 @@ Status DestoryBiTree(BiTree &T)
 	{
 	case BUS:
 		DestoryChain(((ElemType_Vex*)T->data));
-		//DestoryAMList(((ElemType_Vex*)T->data)->Deg2_Equips);(待修改)
 		break;
 	case DEG1:
 		free(T->data);
@@ -114,8 +109,7 @@ Status DestoryBiTree(BiTree &T)
 	return OK;
 }
 
-//查询
-
+//查询（分查询设备、查询电气连接点两类）
 Node* FindAVL_VexID(BiTree &T,VexID_Type id)
 {
 	if(T==NULL)return NULL;
@@ -123,7 +117,6 @@ Node* FindAVL_VexID(BiTree &T,VexID_Type id)
 	if(MoreThan(((ElemType_Vex *)T->data)->id,id))return FindAVL_VexID(T->left,id);
 	if(LessThan(((ElemType_Vex *)T->data)->id,id))return FindAVL_VexID(T->right,id);
 }
-
 Node* FindAVL_ID(BiTree &T,ID_Type id)		//注：id位域是一样的，故deg1/deg2无所谓
 {
 	if(T==NULL)return NULL;
@@ -131,7 +124,6 @@ Node* FindAVL_ID(BiTree &T,ID_Type id)		//注：id位域是一样的，故deg1/deg2无所谓
 	if(MoreThan(((ElemType_Deg1 *)T->data)->id,id))return FindAVL_VexID(T->left,id);
 	if(LessThan(((ElemType_Deg1 *)T->data)->id,id))return FindAVL_VexID(T->right,id);
 }
-
 //右旋
 void R_Rotate(BiTree &p)
 {
@@ -149,7 +141,7 @@ void L_Rotate(BiTree &p)
 	p=rc;
 }
 
-//插入的实现（注意内存分配，得自行提前构造*e）
+//插入的实现
 //左平衡调节子函数
 void LeftBalance(BiTree &T)
 {
@@ -293,7 +285,8 @@ bool InsertAVL(BiTree &T,ElemType *e,bool &taller)//预先构造e结构体
 	return 1;
 }
 
-//删除的实现（全凑在两个函数里了）（id设为int同前）
+//删除的实现（id设为int）
+//递归部分
 Status DeleteAVL_rec(BiTree &p,int id,bool &shorter,Node* &pdel,Node* &plast)
 {
 	//若找到pdel即key对应的结点，则设置pdel,然后继续向下
@@ -509,7 +502,7 @@ Status DeleteAVL_rec(BiTree &p,int id,bool &shorter,Node* &pdel,Node* &plast)
 	plast=p;
 	return OK;
 }
-
+//外部调用接口
 Status DeleteAVL(BiTree &T,int key)
 {
 	//注意：搜索pdel和pleaf的过程都是常规搜索！不用searchmode之类指示
@@ -523,7 +516,7 @@ Status DeleteAVL(BiTree &T,int key)
 	return DeleteAVL_rec(T,key,shorter_flag,pdel,plast);
 }
 
-//以下是AMList和链表(无序)部分（只用于VexTree部分）
+//以下是AMList和链表(无序)部分（只用于VexTree）
 //链表
 //销毁链表
 Status DestoryChain(ElemType_Vex* pVex)
@@ -576,27 +569,6 @@ Status DeleteChain(ElemType_Vex *pVex,ID_Type id)
 }
 
 //AMList
-//销毁图
-Status DestoryAMList(AMListNode *pEdge)
-{
-	if(pEdge==NULL)return OK;
-	if(pEdge->link_A==NULL&&pEdge->link_B==NULL)
-	{
-		free(pEdge);
-		return OK;
-	}
-	if(pEdge->link_A!=NULL)
-	{
-		DestoryAMList(pEdge->link_A);
-	}
-	if(pEdge->link_B!=NULL)
-	{
-		DestoryAMList(pEdge->link_B);
-	}
-	free(pEdge);
-	return OK;
-}
-
 //插入边，直接插在开头
 Status InsertAMList(ElemType_Vex *pVex_A,ElemType_Vex *pVex_B,ID_Type id)
 {
@@ -658,8 +630,6 @@ Status DeleteAMList(ElemType_Vex *pVex_A,ElemType_Vex *pVex_B,ID_Type id)
 	}
 }
 
-
-
 //以下是对外接口
 //插入（重载）
 Status Insert(DataBase &DB,ID_Type id,Equip_Status status,char* name,VexID_Type busid)
@@ -694,7 +664,6 @@ Status Insert(DataBase &DB,ID_Type id,Equip_Status status,char* name,VexID_Type 
 	InsertAVL(DB.EquipTree,pdata,taller);
 	return OK;
 }
-
 Status Insert(DataBase &DB,ID_Type id,Equip_Status status,char* name,VexID_Type busid_A,VexID_Type busid_B,float X)
 {
 	bool taller=true;
@@ -744,7 +713,7 @@ Status Insert(DataBase &DB,ID_Type id,Equip_Status status,char* name,VexID_Type 
 	return OK;
 }
 
-//删除（一锅端）
+//删除
 Status Delete(DataBase &DB,ID_Type id)
 {
 	Node* pNode;	//指向设备树的结点
@@ -796,7 +765,6 @@ Status Change(DataBase &DB,Node* pNode,ID_Type old_id,ID_Type id,Equip_Status st
 	if(Insert(DB,id,status,name,busid)==ERROR)return ERROR;
 	return OK;
 }
-
 Status Change(DataBase &DB,Node* pNode,ID_Type old_id,ID_Type id,Equip_Status status,char* name,VexID_Type busid_A,VexID_Type busid_B,float X)
 {
 	//校验
