@@ -1,6 +1,6 @@
 #pragma once
 #include "const.h"
-#include "DBpart_C.h"
+#include "database.h"
 //表的最大长度和增量
 #define MAXLEN 100
 #define INC 20
@@ -71,28 +71,29 @@ Status InsertISOE_Chain(ISOE_List &L,int idx,ElemType_Vex* pVex)
 	L.base[idx-1].ChainHead=pNewNode;
 	return OK;
 }
-//对整个ISOE的删除（可能有bug）
-void DestoryISOE_AM(ISOE_AMListNode* pEdge)
-{
-	if(pEdge->link_A==NULL&&pEdge->link_B==NULL)
+//对整个ISOE的删除
+//遍历设备树
+Status DeleteISOE_AMList(ISOE_List &L,int isoe_i,int isoe_j,ID_Type id);
+ void FindPwrLine(ISOE_List &L,BiTree &pNode)
+ {
+	if(pNode==NULL)return;
+	if(((ElemType_Deg2*)pNode->data)->type==DEG2)
 	{
-		free(pEdge);
-		return;
+		if((((ElemType_Deg2*)pNode->data)->X>=1e-6||((ElemType_Deg2*)pNode->data)->X<=-1e-6)&&((ElemType_Deg2*)pNode->data)->status==ON)
+		{
+			//是二端设备、开着、有电抗,则删除
+			DeleteISOE_AMList(L,((ElemType_Deg2*)(pNode->data))->bus_A->isoe,((ElemType_Deg2*)(pNode->data))->bus_B->isoe,((ElemType_Deg2*)(pNode->data))->id);
+		}
 	}
-	if(pEdge->link_A!=NULL)
-	{
-		DestoryISOE_AM(pEdge->link_A);
-	}
-	if(pEdge->link_B!=NULL)
-	{
-		DestoryISOE_AM(pEdge->link_B);
-	}
+	//下两个
+	FindPwrLine(L,pNode->left);
+	FindPwrLine(L,pNode->right);
 	return;
-}
-Status DestoryList(ISOE_List& L)
+ }
+Status DestoryList(ISOE_List& L,BiTree &EquipTree)
 {
 	ISOE_ChainNode *pNode,*ptemp;
-	int isoe_not_empty=-1;
+	//先删链表
 	for(int i=0;i<L.length;i++)
 	{
 		pNode=L.base[i].ChainHead;
@@ -102,13 +103,10 @@ Status DestoryList(ISOE_List& L)
 			free(pNode);
 			pNode=ptemp;
 		}
-		if(L.base[i].AMListHead!=NULL)
-			isoe_not_empty=i;
 	}
-	if(isoe_not_empty!=-1)
-	{
-	DestoryISOE_AM(L.base[isoe_not_empty].AMListHead);
-	}
+	//再删边：在设备树中遍历开着的输电线路
+	FindPwrLine(L,EquipTree);
+	//然后放掉数组
 	free(L.base);
 	L.base=NULL;
 	return OK;
@@ -127,6 +125,51 @@ Status InsertISOE_AMList(ISOE_List &L,int isoe_A,int isoe_B,ElemType_Deg2 *pwrli
 	L.base[isoe_A-1].AMListHead=pNewNode;
 	L.base[isoe_B-1].AMListHead=pNewNode;
 	return OK;
+}
+//删除边
+Status DeleteISOE_AMList(ISOE_List &L,int isoe_i,int isoe_j,ID_Type id)
+{
+	if(L.base[isoe_i-1].AMListHead==NULL||L.base[isoe_j-1].AMListHead==NULL)return ERROR;
+	
+	//对A链的操作
+	ISOE_AMListNode *pLast=L.base[isoe_i-1].AMListHead;
+	if(Equal(pLast->pwrline->id,id))
+	{
+		L.base[isoe_i-1].AMListHead=pLast->link_A;
+	}
+	else 
+	{
+		ISOE_AMListNode *pCur=pLast->link_A;
+		while(pCur!=NULL&&!Equal(pCur->pwrline->id,id))
+		{
+			pCur=pCur->link_A;
+			pLast=pLast->link_A;
+		}
+		if(pCur==NULL)return ERROR;
+		//找到了
+		pLast->link_A=pCur->link_A;
+	}
+
+	//对B链的操作
+	pLast=L.base[isoe_j-1].AMListHead;
+	if(Equal(pLast->pwrline->id,id))
+	{
+		L.base[isoe_j-1].AMListHead=pLast->link_B;
+	}
+	else
+	{
+		ISOE_AMListNode *pCur=pLast->link_B;
+		while(pCur!=NULL&&!Equal(pCur->pwrline->id,id))
+		{
+			pCur=pCur->link_B;
+			pLast=pLast->link_B;
+		}
+		if(pCur==NULL)return ERROR;
+		//找到了
+		pLast->link_B=pCur->link_B;
+		free(pCur);
+		return OK;
+	}
 }
 
 //update分3步：
@@ -186,7 +229,7 @@ void unvisited(Node* T)
 	return;
 }
 
-//递归把pVex的连通支找出来
+//递归把pVex的连通支找出来(注意！这里不支持自环！)
 void visitVex(DataBase &DB,ElemType_Vex* pVex,int &cur_isoe_idx,ISOE_List &L,pwrList* &pwrlist)
 {
 	//T在第cur_isoe_idx个节点/连通支/等电位点/总线上，作相应处理
@@ -505,9 +548,25 @@ Status InitCrossList(CrossList &M,int n)
 //销毁矩阵
 Status DestoryCrossList(CrossList &M)
 {
-	//这个回收有问题，暂时充用---------------------------------------------------
-	M.n=0;
-	M.tu=0;
+	OLNode *pElem,*pNext;
+	int i;
+	//一行一行删除
+	for(i=0;i<M.n;i++)
+	{
+		if(M.rhead[i]==NULL)continue;
+		else
+		{
+			pElem=M.rhead[i];
+			pNext=M.rhead[i]->right;
+			while (pNext!=NULL)
+			{
+				free(pElem);
+				pElem=pNext;
+				pNext=pNext->right;
+			}
+			free(pElem);
+		}
+	}
 	free(M.chead);
 	free(M.rhead);
 	return OK;
@@ -650,7 +709,7 @@ Status Update_step3(ISOE_List &L,CrossList &M)
 }
 
 //求关节点留下的函数接口
-void DFSArticul(ISOE_List &L,int v0,int &count,int* &low,int vexnum)
+void DFSArticul(ISOE_List &L,int v0,int &count,int* &low,int vexnum,bool &null_flag)
 {
 	int min;
 	count++;
@@ -662,11 +721,12 @@ void DFSArticul(ISOE_List &L,int v0,int &count,int* &low,int vexnum)
 		int isoe_w=pEdge->isoe_A!=v0?pEdge->isoe_A:pEdge->isoe_B;
 		if(L.base[isoe_w-1].visited==0)
 		{
-			DFSArticul(L,isoe_w,count,low,vexnum);
+			DFSArticul(L,isoe_w,count,low,vexnum,null_flag);
 			if(low[isoe_w-1]<min)
 				min=low[isoe_w-1];
 			if(low[isoe_w-1]>=L.base[v0-1].visited)
 			{
+				null_flag=false;
 				printf("%d ",v0);
 			}
 		}
@@ -677,7 +737,7 @@ void DFSArticul(ISOE_List &L,int v0,int &count,int* &low,int vexnum)
 	}
 	low[v0-1]=min;
 }
-void FindArticul(ISOE_List &L,int vexnum,int isoe_root)
+void FindArticul(ISOE_List &L,int vexnum,int isoe_root,bool &null_flag)
 {
 	int *low;
 	if((low=(int*)calloc(vexnum,sizeof(int)))==NULL)return;
@@ -690,9 +750,10 @@ void FindArticul(ISOE_List &L,int vexnum,int isoe_root)
 	}
 	ISOE_AMListNode* pEdge=L.base[isoe_root-1].AMListHead;
 	int v=pEdge->isoe_A!=isoe_root?pEdge->isoe_A:pEdge->isoe_B;
-	DFSArticul(L,v,count,low,vexnum);
+	DFSArticul(L,v,count,low,vexnum,null_flag);
 	if(count<vexnum)
 	{
+		null_flag=false;
 		printf("%d ",isoe_root);
 		pEdge=pEdge->isoe_A==isoe_root?pEdge->link_A:pEdge->link_B;
 		while (pEdge!=NULL)
@@ -701,7 +762,7 @@ void FindArticul(ISOE_List &L,int vexnum,int isoe_root)
 			pEdge=pEdge->isoe_A==isoe_root?pEdge->link_A:pEdge->link_B;
 
 			if(L.base[v-1].visited==0)
-				DFSArticul(L,v,count,low,vexnum);
+				DFSArticul(L,v,count,low,vexnum,null_flag);
 		}
 	}
 }

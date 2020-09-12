@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "const.h"
-#include "DBpart_C.h"
+#include "database.h"
 #include "graph.h"
 //减少调用函数的开销
 #define nextTok(buf,tok)		\
@@ -162,6 +162,41 @@ Status Command_handler(DataBase &DB,char* buffer,char* path,ISOE_List &L,ISLAND_
 
 	switch (buffer[token])
 	{
+	case 'h':
+		preProcess(buffer,token);
+		while(buffer[token]=='\0'||buffer[token]==' '||buffer[token]=='\t')token++;	
+		if(strMatch(buffer,token,"help"))
+		{
+			printf("***************************************************************************************************\n");
+			printf("*Editor:tannlonggtaoo, uploaded at 2020/09/12.                                                    *\n");
+			printf("*Welcome you to use my Power-System-DataBase.                                                     *\n");
+			printf("*This is a very trivial datahandler for fun.FATAL ERRORS MAY BE IN THIS PROGRAM.                  *\n");
+			printf("*                                                                                                 *\n");
+			printf("*Here is a command list (Chinese names are supported):                                            *\n");
+			printf("*                                                                                                 *\n");
+			printf("*insert [A COMPLETE RECORD OF SOME EQUIPMENT]:                Insert some equipment into database.*\n");
+			printf("*change ID=[equipment's ID] [attribute] [value]...:                                 Change record.*\n");
+			printf("*delete ID=[equipment's ID]:                                                        Delete record.*\n");
+			printf("*print ID=[equipment's ID]:                      Print all info of this equipment in standard I/O.*\n");
+			printf("*find fromto=[connection point's ID]:            Print all equipments' ID connected on this point.*\n");
+			printf("*exit:                                                                          Exit this program.*\n");
+			printf("*execute [file path]:                                  Import .txt file and execute commands in it*\n");
+			printf("*update model:                                 Update the topologic model of current Power System.*\n");
+			printf("*-------------------------------------------------------------------------------------------------*\n");
+			printf("*--------------YOU ARE REQUIRED TO UPDATE MODEL BEFORE USING THE COMMANDS BELOW-------------------*\n");
+			printf("*-------------------------------------------------------------------------------------------------*\n");
+			printf("*get artic:                                                    Print all buses serve as cutpoints.*\n");
+			printf("*get island [topo-island's ID]:                      Print all buses in corresponding topo-island.*\n");
+			printf("*get bus [equipment's ID]:                                       Print which bus the equipment in.*\n");
+			printf("*get equip [bus ID]:                                    Print all equipments' ID in the given bus.*\n");
+			printf("*get line [bus ID1] [bus ID2]:                          Print the powerline between the two buses.*\n");
+			printf("*get Y [bus ID1] [bus ID2]:                      Print corresponding element in admittance matrix.*\n");
+			printf("***************************************************************************************************\n");
+			printf("Please input your command:\n");
+			cmdStatus=OK;
+		}
+		else cmdStatus=ERROR;
+		break;
 	case 'g':
 		preProcess(buffer,token);
 		if(strMatch(buffer,token,"get"))
@@ -172,13 +207,15 @@ Status Command_handler(DataBase &DB,char* buffer,char* path,ISOE_List &L,ISLAND_
 			case 'a':
 				if(strMatch(buffer,token,"artic"))
 				{
+					bool null_flag=true;
 					for(int idx=1;idx<=IL.length;idx++)
 					{
 						if(IL.base[idx-1].isoc_num>2)		//单点、二点非割点
 						{
-							FindArticul(L,IL.base[idx-1].isoc_num,IL.base[idx-1].pHead->isoe_idx);
+							FindArticul(L,IL.base[idx-1].isoc_num,IL.base[idx-1].pHead->isoe_idx,null_flag);
 						}
 					}
+					if(null_flag)printf("NULL");
 					printf("\n");
 					cmdStatus=OK;
 					break;
@@ -327,7 +364,7 @@ Status Command_handler(DataBase &DB,char* buffer,char* path,ISOE_List &L,ISLAND_
 			//step0,把旧的结构删除
 			DestoryCrossList(M);
 			DestoryISLAND(IL);
-			DestoryList(L);
+			DestoryList(L,DB.EquipTree);
 			}
 			//step1
 			Update_step1(DB,L);
@@ -554,9 +591,9 @@ Status Command_handler(DataBase &DB,char* buffer,char* path,ISOE_List &L,ISLAND_
 	case ERROR:
 		printf("ERROR\n");
 		break;
-	default:
-		printf("UNKNOWN RESULT\n");		//调试用
-		break;
+	//default:
+	//	printf("UNKNOWN RESULT\n");		//调试用
+	//	break;
 	}
 	return cmdStatus;
 }
